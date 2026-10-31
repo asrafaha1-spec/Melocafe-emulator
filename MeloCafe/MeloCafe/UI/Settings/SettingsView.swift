@@ -208,6 +208,7 @@ struct SettingsView: View {
     @AppStorage("breakpoint") var stikDebugbreakpoint = false
 
     @AppStorage("showSwapButton") var showSwapButton: Bool = true
+    @AppStorage("showMenuButton") var showMenuButton: Bool = true
     @AppStorage("screenLayout") private var screenLayout = ScreenLayout.initialValue
 
     @State private var selectedTab: SettingsTab = .general
@@ -343,6 +344,8 @@ struct SettingsView: View {
                 Toggle("Show Swap Button (TV <-> Pad)", isOn: $showSwapButton)
                     .transition(.opacity)
             }
+
+            Toggle("Show Menu Button", isOn: $showMenuButton)
 
             Toggle("Disable Screensaver", isOn: configManager.disableScreensaver)
             Toggle("Play Boot Sound", isOn: configManager.playBootSound)

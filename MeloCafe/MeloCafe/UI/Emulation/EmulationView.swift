@@ -17,6 +17,8 @@ struct EmulationView: View {
     @AppStorage("screenLayout") private var screenLayout = ScreenLayout.initialValue
     @State private var swapped = false
     @State private var showingEmulatedDevices = false
+    @AppStorage("showMenuButton") private var showMenuButton = true
+    @State private var confirmingQuit = false
     @ObservedObject private var configManager = ConfigManager.shared
     @ObservedObject private var air = Air.shared
     @Environment(\.verticalSizeClass) var verticalSizeClass
@@ -93,6 +95,12 @@ struct EmulationView: View {
                 .padding(10)
             }
         }
+        .overlay(alignment: .top) {
+            if showMenuButton && !(UIDevice.current.userInterfaceIdiom == .phone && verticalSizeClass == .regular) {
+                menuButton
+                    .padding(10)
+            }
+        }
         .statusBarHidden(true)
         .overlay(alignment: .topTrailing) {
             if configManager.emulateSkylanderPortal.wrappedValue ||
@@ -113,6 +121,12 @@ struct EmulationView: View {
                 }
                 .padding(10)
             }
+        }
+        .confirmationDialog("Quit Game?", isPresented: $confirmingQuit, titleVisibility: .visible) {
+            Button("Quit MeloCafe", role: .destructive) { quitGame() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This shuts the game down and closes the app. Unsaved progress is lost.")
         }
         .onAppear {
             updateVisibleOutputs()
@@ -136,6 +150,15 @@ struct EmulationView: View {
                     metalView: main ? cemuView : cemuPadView
                 )
                 .frame(width: size.width, height: screenHeight)
+            }
+
+            if showMenuButton {
+                HStack {
+                    Spacer()
+                    menuButton
+                }
+                .padding(.horizontal, 10)
+                .padding(.top, 6)
             }
 
             if controllerManager.hasVirtual() {
@@ -162,6 +185,62 @@ struct EmulationView: View {
         }
     }
     
+    private var emulatedDevicesEnabled: Bool {
+        configManager.emulateSkylanderPortal.wrappedValue ||
+            configManager.emulateInfinityBase.wrappedValue ||
+            configManager.emulateDimensionsToypad.wrappedValue
+    }
+
+    /// Always-visible menu button. Styled like the other overlay buttons on this screen.
+    private var menuButton: some View {
+        Menu {
+            if screenLayout == .singleScreen && !air.connected {
+                Button {
+                    swapped.toggle()
+                } label: {
+                    Label("Swap TV and GamePad", systemImage: "rectangle.2.swap")
+                }
+            }
+
+            if emulatedDevicesEnabled {
+                Button {
+                    showingEmulatedDevices = true
+                } label: {
+                    Label("Emulated Devices", systemImage: "externaldrive.connected.to.line.below")
+                }
+            }
+
+            Button(role: .destructive) {
+                confirmingQuit = true
+            } label: {
+                Label("Quit Game", systemImage: "power")
+            }
+        } label: {
+            Image(systemName: "line.3.horizontal")
+                .font(.title3)
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(.black.opacity(0.6), in: Circle())
+        }
+        .accessibilityLabel("Menu")
+    }
+
+    /// There is no way to stop one title and start another (the core's shutdown tears the whole system down), so
+    /// quitting means shutting the core down cleanly and then closing the app.
+    private func quitGame() {
+        ControllerManager.shared.isRunning = false
+        ControllerManager.shared.detachAllFromCore()
+
+        // The core's shutdown can take a while, so it runs off the main thread (like CemuRun does).
+        Thread.detachNewThread {
+            CemuShutdown()
+            DispatchQueue.main.async { exit(0) }
+        }
+
+        // Never leave the player stuck on a shutdown that hangs.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) { exit(0) }
+    }
+
     private func updateVisibleOutputs() {
         let both = air.connected || screenLayout.showsBothScreens
         
