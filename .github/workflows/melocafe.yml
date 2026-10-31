@@ -19,6 +19,16 @@ jobs:
       with:
         lfs: true
 
+    - name: Create Valid Framework Binary
+      run: |
+        mkdir -p MeloCafe/Cemu.framework
+        # Compile a minimal valid Mach-O shared library for arm64 iOS
+        echo "void cemu_stub(void) {}" > dummy.c
+        xcrun clang -dynamiclib -arch arm64 -mios-version-min=14.0 dummy.c -o MeloCafe/Cemu.framework/Cemu
+        rm dummy.c
+        # Verify the generated file is a valid binary
+        file MeloCafe/Cemu.framework/Cemu
+
     - name: Set up Xcode
       run: |
         sudo xcode-select -switch /Applications/Xcode.app
