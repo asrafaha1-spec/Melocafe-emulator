@@ -6,77 +6,60 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-ios:
-    name: Build MeloCafe iOS IPA
+  build:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          lfs: true
+    - name: Checkout Repository with LFS
+      uses: actions/checkout@v4
+      with:
+        lfs: true
 
-      - name: Fetch Git LFS Objects
-        run: |
-          git lfs install
-          git lfs pull
+    - name: Pull Git LFS Binaries Explicitly
+      run: |
+        git lfs install
+        git lfs pull
 
-      - name: Ensure Framework Exists in Expected Directory
-        run: |
-          # Create Frameworks directory if the project expects it there
-          mkdir -p MeloCafe/Frameworks
-          if [ -d "MeloCafe/Cemu.framework" ]; then
-            cp -R MeloCafe/Cemu.framework MeloCafe/Frameworks/
-          elif [ -d "Cemu.framework" ]; then
-            cp -R Cemu.framework MeloCafe/Frameworks/
-          fi
-          ls -la MeloCafe/Frameworks/
+    - name: Build Cemu Dependency First
+      run: |
+        if [ -d "Cemu" ]; then
+          echo "Building Cemu subproject..."
+          xcodebuild -project Cemu/Cemu.xcodeproj -scheme "Cemu" -sdk iphoneos -configuration Release build || true
+        elif [ -d "../Cemu" ]; then
+          echo "Building Cemu from parent directory..."
+          xcodebuild -project ../Cemu/Cemu.xcodeproj -scheme "Cemu" -sdk iphoneos -configuration Release build || true
+        fi
 
-      - name: Set up Xcode Environment
-        run: |
-          sudo xcode-select -switch /Applications/Xcode.app
-          xcodebuild -version
+    - name: Set up Xcode
+      run: |
+        sudo xcode-select -switch /Applications/Xcode.app
+        xcodebuild -version
 
-      - name: Compile Unsigned iOS Application
-        run: |
-          WORKSPACE=$(find . -maxdepth 3 -name "*.xcworkspace" | head -n 1)
-          PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
-          
-          if [ -n "$WORKSPACE" ]; then
-            echo "Building via Workspace: $WORKSPACE"
-            xcodebuild -workspace "$WORKSPACE" \
-                       -scheme "MeloCafe" \
-                       -sdk iphoneos \
-                       -configuration Release \
-                       CODE_SIGN_IDENTITY="" \
-                       CODE_SIGNING_REQUIRED=NO \
-                       CODE_SIGNING_ALLOWED=NO \
-                       build
-          elif [ -n "$PROJECT" ]; then
-            echo "Building via Project: $PROJECT"
-            xcodebuild -project "$PROJECT" \
-                       -scheme "MeloCafe" \
-                       -scheme "MeloCafe" \
-                       -sdk iphoneos \
-                       -configuration Release \
-                       CODE_SIGN_IDENTITY="" \
-                       CODE_SIGNING_REQUIRED=NO \
-                       CODE_SIGNING_ALLOWED=NO \
-                       build
-          else
-            echo "Error: Could not locate .xcodeproj or .xcworkspace"
-            exit 1
-          fi
+    - name: Build App for Device (Unsigned)
+      run: |
+        WORKSPACE=$(find . -maxdepth 3 -name "*.xcworkspace" | head -n 1)
+        PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
+        
+        if [ -n "$WORKSPACE" ]; then
+          echo "Found workspace at: $WORKSPACE"
+          xcodebuild -workspace "$WORKSPACE" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+        elif [ -n "$PROJECT" ]; then
+          echo "Found project at: $PROJECT"
+          xcodebuild -project "$PROJECT" -scheme "MeloCafe" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+        else
+          echo "No Xcode project or workspace found!"
+          exit 1
+        fi
 
-      - name: Package Payload into .ipa
-        run: |
-          mkdir -p Payload
-          cp -R ~/Library/Developer/Xcode/DerivedData/*/Build/Products/Release-iphoneos/*.app Payload/
-          zip -r MeloCafe.ipa Payload
-          rm -rf Payload
+    - name: Package into IPA
+      run: |
+        mkdir -p Payload
+        cp -R ~/Library/Developer/Xcode/DerivedData/*/Build/Products/Release-iphoneos/*.app Payload/
+        zip -r MeloCafe.ipa Payload
+        rm -rf Payload
 
-      - name: Upload Finished IPA
-        uses: actions/upload-artifact@v4
-        with:
-          name: MeloCafe-IPA
-          path: MeloCafe.ipa
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MeloCafe-IPA
+        path: MeloCafe.ipa
