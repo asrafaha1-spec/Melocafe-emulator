@@ -19,14 +19,13 @@ jobs:
       with:
         lfs: true
 
-    - name: Create Valid Framework Binary
+    - name: Generate Valid Cemu Framework Stub
       run: |
         mkdir -p MeloCafe/Cemu.framework
-        # Compile a minimal valid Mach-O shared library for arm64 iOS
-        echo "void cemu_stub(void) {}" > dummy.c
-        xcrun clang -dynamiclib -arch arm64 -mios-version-min=14.0 dummy.c -o MeloCafe/Cemu.framework/Cemu
-        rm dummy.c
-        # Verify the generated file is a valid binary
+        echo "void __Cemu_stub(void) {}" > cemu_stub.c
+        xcrun clang -dynamiclib -arch arm64 -mios-version-min=14.0 cemu_stub.c -o MeloCafe/Cemu.framework/Cemu
+        rm cemu_stub.c
+        echo '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.cemu.framework</string><key>CFBundleExecutable</key><string>Cemu</string></dict></plist>' > MeloCafe/Cemu.framework/Info.plist
         file MeloCafe/Cemu.framework/Cemu
 
     - name: Set up Xcode
