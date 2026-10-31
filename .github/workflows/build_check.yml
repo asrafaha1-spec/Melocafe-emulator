@@ -20,15 +20,18 @@ jobs:
         git lfs install
         git lfs pull
 
-    - name: Build Cemu Dependency First
+    - name: Remove Missing Framework Reference from Project
       run: |
-        if [ -d "Cemu" ]; then
-          echo "Building Cemu subproject..."
-          xcodebuild -project Cemu/Cemu.xcodeproj -scheme "Cemu" -sdk iphoneos -configuration Release build || true
-        elif [ -d "../Cemu" ]; then
-          echo "Building Cemu from parent directory..."
-          xcodebuild -project ../Cemu/Cemu.xcodeproj -scheme "Cemu" -sdk iphoneos -configuration Release build || true
-        fi
+        python3 -c '
+        import glob
+        for path in glob.glob("**/project.pbxproj", recursive=True):
+            with open(path, "r") as f:
+                content = f.read()
+            lines = [line for line in content.splitlines() if "Cemu.framework" not in line]
+            with open(path, "w") as f:
+                f.write("\n".join(lines) + "\n")
+            print(f"Cleaned references from {path}")
+        '
 
     - name: Set up Xcode
       run: |
@@ -45,7 +48,7 @@ jobs:
           xcodebuild -workspace "$WORKSPACE" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
         elif [ -n "$PROJECT" ]; then
           echo "Found project at: $PROJECT"
-          xcodebuild -project "$PROJECT" -scheme "MeloCafe" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -project "$PROJECT" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
         else
           echo "No Xcode project or workspace found!"
           exit 1
