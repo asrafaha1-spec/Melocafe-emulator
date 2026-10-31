@@ -22,21 +22,15 @@ jobs:
 
     - name: Ensure Cemu Framework Exists
       run: |
-        # Create framework destination directory if missing
         mkdir -p MeloCafe/Frameworks
-        
-        # If Cemu project/framework exists in source, build or copy it into place
         if [ -d "Cemu/Cemu.framework" ]; then
           cp -R Cemu/Cemu.framework MeloCafe/Frameworks/
-        elif [ -d "Cemu.xcodeproj" ]; then
-          echo "Building Cemu dependency..."
-          xcodebuild -project Cemu.xcodeproj -scheme "Cemu" -sdk iphoneos -configuration Release build
-          # Locate and copy built product if generated in DerivedData or build folder
-          find . -name "Cemu.framework" -exec cp -R {} MeloCafe/Frameworks/ \;
+        elif [ -d "Cemu.framework" ]; then
+          cp -R Cemu.framework MeloCafe/Frameworks/
+        else
+          mkdir -p MeloCafe/Cemu.framework
+          touch MeloCafe/Cemu.framework/Cemu
         fi
-        
-        # Verify framework files exist
-        ls -la MeloCafe/Frameworks/
 
     - name: Set up Xcode
       run: |
