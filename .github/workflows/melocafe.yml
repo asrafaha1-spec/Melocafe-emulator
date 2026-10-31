@@ -15,8 +15,10 @@ jobs:
       with:
         lfs: true
 
-    - name: Checkout LFS Objects
-      run: git lfs pull
+    - name: Pull Git LFS Binaries Explicitly
+      run: |
+        git lfs install
+        git lfs pull
 
     - name: Set up Xcode
       run: |
