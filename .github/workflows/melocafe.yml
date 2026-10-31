@@ -20,13 +20,15 @@ jobs:
 
     - name: Build App for Device (Unsigned)
       run: |
-        # Find the workspace or project file automatically
-        WORKSPACE=$(ls -d *.xcworkspace 2>/dev/null | head -n 1)
-        PROJECT=$(ls -d *.xcodeproj 2>/dev/null | head -n 1)
+        # Locate .xcworkspace or .xcodeproj across the whole repository
+        WORKSPACE=$(find . -maxdepth 3 -name "*.xcworkspace" | head -n 1)
+        PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
         
         if [ -n "$WORKSPACE" ]; then
+          echo "Found workspace at: $WORKSPACE"
           xcodebuild -workspace "$WORKSPACE" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
         elif [ -n "$PROJECT" ]; then
+          echo "Found project at: $PROJECT"
           xcodebuild -project "$PROJECT" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
         else
           echo "No Xcode project or workspace found!"
@@ -36,7 +38,6 @@ jobs:
     - name: Package into IPA
       run: |
         mkdir -p Payload
-        # Move the built app into the Payload folder
         cp -R ~/Library/Developer/Xcode/DerivedData/*/Build/Products/Release-iphoneos/*.app Payload/
         zip -r MeloCafe.ipa Payload
         rm -rf Payload
