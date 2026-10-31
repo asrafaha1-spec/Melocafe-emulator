@@ -21,6 +21,17 @@ jobs:
           git lfs install
           git lfs pull
 
+      - name: Ensure Framework Exists in Expected Directory
+        run: |
+          # Create Frameworks directory if the project expects it there
+          mkdir -p MeloCafe/Frameworks
+          if [ -d "MeloCafe/Cemu.framework" ]; then
+            cp -R MeloCafe/Cemu.framework MeloCafe/Frameworks/
+          elif [ -d "Cemu.framework" ]; then
+            cp -R Cemu.framework MeloCafe/Frameworks/
+          fi
+          ls -la MeloCafe/Frameworks/
+
       - name: Set up Xcode Environment
         run: |
           sudo xcode-select -switch /Applications/Xcode.app
@@ -31,16 +42,12 @@ jobs:
           WORKSPACE=$(find . -maxdepth 3 -name "*.xcworkspace" | head -n 1)
           PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
           
-          # Search locations for Cemu.framework
-          SEARCH_PATHS="$(pwd)/MeloCafe $(pwd)/MeloCafe/Frameworks $(pwd)"
-          
           if [ -n "$WORKSPACE" ]; then
             echo "Building via Workspace: $WORKSPACE"
             xcodebuild -workspace "$WORKSPACE" \
                        -scheme "MeloCafe" \
                        -sdk iphoneos \
                        -configuration Release \
-                       FRAMEWORK_SEARCH_PATHS="$SEARCH_PATHS \$(inherited)" \
                        CODE_SIGN_IDENTITY="" \
                        CODE_SIGNING_REQUIRED=NO \
                        CODE_SIGNING_ALLOWED=NO \
@@ -49,9 +56,9 @@ jobs:
             echo "Building via Project: $PROJECT"
             xcodebuild -project "$PROJECT" \
                        -scheme "MeloCafe" \
+                       -scheme "MeloCafe" \
                        -sdk iphoneos \
                        -configuration Release \
-                       FRAMEWORK_SEARCH_PATHS="$SEARCH_PATHS \$(inherited)" \
                        CODE_SIGN_IDENTITY="" \
                        CODE_SIGNING_REQUIRED=NO \
                        CODE_SIGNING_ALLOWED=NO \
