@@ -20,22 +20,23 @@ jobs:
         git lfs install
         git lfs pull
 
-    - name: Ensure Framework Exists in Expected Directory
+    - name: Ensure Cemu Framework Exists
       run: |
+        # Create framework destination directory if missing
         mkdir -p MeloCafe/Frameworks
-        if [ -d "MeloCafe/Cemu.framework" ]; then
-          cp -R MeloCafe/Cemu.framework MeloCafe/Frameworks/
-        elif [ -d "Cemu.framework" ]; then
-          cp -R Cemu.framework MeloCafe/Frameworks/
+        
+        # If Cemu project/framework exists in source, build or copy it into place
+        if [ -d "Cemu/Cemu.framework" ]; then
+          cp -R Cemu/Cemu.framework MeloCafe/Frameworks/
+        elif [ -d "Cemu.xcodeproj" ]; then
+          echo "Building Cemu dependency..."
+          xcodebuild -project Cemu.xcodeproj -scheme "Cemu" -sdk iphoneos -configuration Release build
+          # Locate and copy built product if generated in DerivedData or build folder
+          find . -name "Cemu.framework" -exec cp -R {} MeloCafe/Frameworks/ \;
         fi
-
-    - name: Patch Xcode Project File References
-      run: |
-        PROJECT_FILE=$(find . -name "project.pbxproj" | head -n 1)
-        if [ -n "$PROJECT_FILE" ]; then
-          echo "Patching project file: $PROJECT_FILE"
-          sed -i '' '/Cemu.framework/d' "$PROJECT_FILE" || true
-        fi
+        
+        # Verify framework files exist
+        ls -la MeloCafe/Frameworks/
 
     - name: Set up Xcode
       run: |
