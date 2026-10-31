@@ -1,18 +1,75 @@
-name: Build check
-on: 
-  pull_request:
-    paths-ignore:
-      - "*.md"
-    types:
-      - opened
-      - synchronize
-      - reopened
+name: Build iOS App
+
+on:
   push:
-    paths-ignore:
-      - "*.md"
-    branches:
-      - main
+    branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build:
-    uses: ./.github/workflows/build.yml
+  build-ios:
+    name: Build MeloCafe iOS IPA
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Fetch Git LFS Objects
+        run: |
+          git lfs install
+          git lfs pull
+
+      - name: Set up Xcode Environment
+        run: |
+          sudo xcode-select -switch /Applications/Xcode.app
+          xcodebuild -version
+
+      - name: Compile Unsigned iOS Application
+        run: |
+          WORKSPACE=$(find . -maxdepth 3 -name "*.xcworkspace" | head -n 1)
+          PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
+          
+          # Search locations for Cemu.framework
+          SEARCH_PATHS="$(pwd)/MeloCafe $(pwd)/MeloCafe/Frameworks $(pwd)"
+          
+          if [ -n "$WORKSPACE" ]; then
+            echo "Building via Workspace: $WORKSPACE"
+            xcodebuild -workspace "$WORKSPACE" \
+                       -scheme "MeloCafe" \
+                       -sdk iphoneos \
+                       -configuration Release \
+                       FRAMEWORK_SEARCH_PATHS="$SEARCH_PATHS \$(inherited)" \
+                       CODE_SIGN_IDENTITY="" \
+                       CODE_SIGNING_REQUIRED=NO \
+                       CODE_SIGNING_ALLOWED=NO \
+                       build
+          elif [ -n "$PROJECT" ]; then
+            echo "Building via Project: $PROJECT"
+            xcodebuild -project "$PROJECT" \
+                       -scheme "MeloCafe" \
+                       -sdk iphoneos \
+                       -configuration Release \
+                       FRAMEWORK_SEARCH_PATHS="$SEARCH_PATHS \$(inherited)" \
+                       CODE_SIGN_IDENTITY="" \
+                       CODE_SIGNING_REQUIRED=NO \
+                       CODE_SIGNING_ALLOWED=NO \
+                       build
+          else
+            echo "Error: Could not locate .xcodeproj or .xcworkspace"
+            exit 1
+          fi
+
+      - name: Package Payload into .ipa
+        run: |
+          mkdir -p Payload
+          cp -R ~/Library/Developer/Xcode/DerivedData/*/Build/Products/Release-iphoneos/*.app Payload/
+          zip -r MeloCafe.ipa Payload
+          rm -rf Payload
+
+      - name: Upload Finished IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: MeloCafe-IPA
+          path: MeloCafe.ipa
