@@ -11,45 +11,56 @@ concurrency:
 
 jobs:
   build:
-    runs-on: macos-latest
-
+    runs-on: macos-15
+    timeout-minutes: 360
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-archives
     steps:
-    - name: Checkout Repository with LFS
+    - name: Checkout Repository
       uses: actions/checkout@v4
       with:
+        submodules: recursive
         lfs: true
 
-    - name: Generate Valid Cemu Framework Stub
+    - name: Install tools
       run: |
-        mkdir -p MeloCafe/Cemu.framework
-        echo "void __Cemu_stub(void) {}" > cemu_stub.c
-        xcrun clang -dynamiclib -arch arm64 -mios-version-min=14.0 cemu_stub.c -o MeloCafe/Cemu.framework/Cemu
-        rm cemu_stub.c
-        echo '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>com.cemu.framework</string><key>CFBundleExecutable</key><string>Cemu</string></dict></plist>' > MeloCafe/Cemu.framework/Info.plist
-        file MeloCafe/Cemu.framework/Cemu
-
-    - name: Set up Xcode
-      run: |
-        sudo xcode-select -switch /Applications/Xcode.app
+        brew install cmake ninja pkg-config autoconf automake libtool
+        NEWEST="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+        if [ -n "$NEWEST" ]; then sudo xcode-select -s "$NEWEST/Contents/Developer"; fi
         xcodebuild -version
+        if ! xcrun -sdk iphoneos metal --version >/dev/null 2>&1; then
+          xcodebuild -downloadComponent MetalToolchain
+        fi
+        xcrun -sdk iphoneos metal --version
+
+    - name: Cache vcpkg binaries
+      uses: actions/cache@v4
+      with:
+        path: .vcpkg-archives
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'triplets/**') }}
+        restore-keys: vcpkg-${{ runner.os }}-
+
+    # The app's Xcode project references ../build/Cemu.xcodeproj (the CMake-generated core project).
+    - name: Generate Cemu Xcode project
+      run: |
+        mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+        cmake -S . -B build -G Xcode \
+          -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DVCPKG_TARGET_TRIPLET=arm64-ios \
+          -DBUILD_HEADLESS_DYLIB=ON -DCMAKE_MACOSX_BUNDLE=OFF
 
     - name: Build App for Device (Unsigned)
       run: |
-        WORKSPACE=$(find . -maxdepth 3 -name "*.xcworkspace" | head -n 1)
-        PROJECT=$(find . -maxdepth 3 -name "*.xcodeproj" | head -n 1)
-        
-        if [ -n "$WORKSPACE" ]; then
-          xcodebuild -workspace "$WORKSPACE" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
-        else
-          xcodebuild -project "$PROJECT" -scheme "MeloCafe" -sdk iphoneos -configuration Release CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
-        fi
+        xcodebuild -workspace MeloCafe/MeloCafe.xcworkspace -scheme MeloCafe -sdk iphoneos \
+          -configuration Release -derivedDataPath "$GITHUB_WORKSPACE/build-xcode" \
+          CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
 
     - name: Package into IPA
       run: |
         mkdir -p Payload
-        cp -R ~/Library/Developer/Xcode/DerivedData/*/Build/Products/Release-iphoneos/*.app Payload/
-        zip -r MeloCafe.ipa Payload
-        rm -rf Payload
+        APP="$(find build-xcode/Build/Products -maxdepth 2 -name MeloCafe.app | head -1)"
+        cp -R "$APP" Payload/
+        zip -qr MeloCafe.ipa Payload
 
     - name: Upload IPA Artifact
       uses: actions/upload-artifact@v4
