@@ -22,11 +22,15 @@ final class MainSceneDelegate: UIResponder, UIWindowSceneDelegate {
                options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
         let controller: ContentHostingController
+        #if !CI_OLD_SDK
         if #available(iOS 27.0, *) {
             controller = AccessoryContentHostingController()
         } else {
             controller = ContentHostingController()
         }
+        #else
+        controller = ContentHostingController()
+        #endif
         let window = UIWindow(windowScene: windowScene)
         self.window = window
         
@@ -143,6 +147,7 @@ class ContentHostingController: UIHostingController<AnyView> {
     }
 }
 
+#if !CI_OLD_SDK
 @available(iOS 27.0, *)
 final class AccessoryContentHostingController: ContentHostingController {
     private var displayRegistration: UISceneAccessoryRegistration?
@@ -159,3 +164,4 @@ final class AccessoryContentHostingController: ContentHostingController {
         }
     }
 }
+#endif

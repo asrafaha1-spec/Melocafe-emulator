@@ -53,7 +53,8 @@ jobs:
       run: |
         xcodebuild -workspace MeloCafe/MeloCafe.xcworkspace -scheme MeloCafe -sdk iphoneos \
           -configuration Release -derivedDataPath "$GITHUB_WORKSPACE/build-xcode" \
-          CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+          CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) CI_OLD_SDK' build
 
     - name: Package into IPA
       run: |
