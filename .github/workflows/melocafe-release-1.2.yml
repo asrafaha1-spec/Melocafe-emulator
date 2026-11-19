@@ -22,6 +22,11 @@ jobs:
         submodules: recursive
         lfs: true
 
+    - name: Checkout this fork (for CI scripts)
+      uses: actions/checkout@v4
+      with:
+        path: _fork
+
     - name: Install tools
       run: |
         brew install cmake ninja pkg-config autoconf automake libtool ldid
@@ -77,7 +82,7 @@ jobs:
         zip -qr MeloCafe-${{ inputs.ref }}.ipa Payload
 
     - name: Make TrollStore .tipa (fake-signed with memory entitlements)
-      run: ci/make-trollstore.sh . MeloCafe-${{ inputs.ref }}.tipa
+      run: _fork/ci/make-trollstore.sh . MeloCafe-${{ inputs.ref }}.tipa
 
     - name: Upload IPA Artifact
       uses: actions/upload-artifact@v4
