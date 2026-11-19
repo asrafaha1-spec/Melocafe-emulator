@@ -1,0 +1,83 @@
+name: Build MeloCafe 1.2 IPA (upstream tag)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: stossy11/MeloCafe tag or branch to build
+        default: "1.2"
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 360
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.vcpkg-archives
+    steps:
+    - name: Checkout upstream source
+      uses: actions/checkout@v4
+      with:
+        repository: stossy11/MeloCafe
+        ref: ${{ inputs.ref }}
+        submodules: recursive
+        lfs: true
+
+    - name: Install tools
+      run: |
+        brew install cmake ninja pkg-config autoconf automake libtool
+        NEWEST="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
+        if [ -n "$NEWEST" ]; then sudo xcode-select -s "$NEWEST/Contents/Developer"; fi
+        xcodebuild -version
+        if ! xcrun -sdk iphoneos metal --version >/dev/null 2>&1; then
+          xcodebuild -downloadComponent MetalToolchain
+        fi
+        xcrun -sdk iphoneos metal --version
+
+    # The iOS 26 SDK on the runner has no iOS 27 scene accessory API, so that optional code is compiled out.
+    - name: Skip iOS 27-only code
+      run: |
+        python3 - <<'PY'
+        import re
+        p = "MeloCafe/MeloCafe/UI/MeloCafeApp.swift"
+        s = open(p, newline="").read().replace("\r\n", "\n")
+        s = re.sub(r"if #available\(iOS 27\.0, \*\) \{\n\s*controller = AccessoryContentHostingController\(\)\n\s*\} else \{\n(\s*controller = ContentHostingController\(\)\n)\s*\}",
+                   lambda m: m.group(1).rstrip("\n").lstrip() + "\n", s)
+        s = re.sub(r"@available\(iOS 27\.0, \*\)\nfinal class AccessoryContentHostingController.*?\n\}\n",
+                   lambda m: "#if false\n" + m.group(0) + "#endif\n", s, flags=re.S)
+        open(p, "w", newline="").write(s)
+        PY
+        grep -n "AccessoryContentHostingController" MeloCafe/MeloCafe/UI/MeloCafeApp.swift || true
+
+    - name: Cache vcpkg binaries
+      uses: actions/cache@v4
+      with:
+        path: .vcpkg-archives
+        key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'triplets/**') }}
+        restore-keys: vcpkg-${{ runner.os }}-
+
+    - name: Generate Cemu Xcode project
+      run: |
+        mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+        cmake -S . -B build -G Xcode \
+          -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 -DVCPKG_TARGET_TRIPLET=arm64-ios \
+          -DBUILD_HEADLESS_DYLIB=ON -DCMAKE_MACOSX_BUNDLE=OFF
+
+    - name: Build App for Device (Unsigned)
+      run: |
+        xcodebuild -workspace MeloCafe/MeloCafe.xcworkspace -scheme MeloCafe -sdk iphoneos \
+          -configuration Release -derivedDataPath "$GITHUB_WORKSPACE/build-xcode" \
+          CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build
+
+    - name: Package into IPA
+      run: |
+        mkdir -p Payload
+        APP="$(find build-xcode/Build/Products -maxdepth 2 -name MeloCafe.app | head -1)"
+        cp -R "$APP" Payload/
+        zip -qr MeloCafe-${{ inputs.ref }}.ipa Payload
+
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: MeloCafe-${{ inputs.ref }}-IPA
+        path: MeloCafe-${{ inputs.ref }}.ipa
