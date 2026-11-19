@@ -24,7 +24,7 @@ jobs:
 
     - name: Install tools
       run: |
-        brew install cmake ninja pkg-config autoconf automake libtool
+        brew install cmake ninja pkg-config autoconf automake libtool ldid
         NEWEST="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)"
         if [ -n "$NEWEST" ]; then sudo xcode-select -s "$NEWEST/Contents/Developer"; fi
         xcodebuild -version
@@ -76,8 +76,13 @@ jobs:
         cp -R "$APP" Payload/
         zip -qr MeloCafe-${{ inputs.ref }}.ipa Payload
 
+    - name: Make TrollStore .tipa (fake-signed with memory entitlements)
+      run: ci/make-trollstore.sh . MeloCafe-${{ inputs.ref }}.tipa
+
     - name: Upload IPA Artifact
       uses: actions/upload-artifact@v4
       with:
         name: MeloCafe-${{ inputs.ref }}-IPA
-        path: MeloCafe-${{ inputs.ref }}.ipa
+        path: |
+          MeloCafe-${{ inputs.ref }}.ipa
+          MeloCafe-${{ inputs.ref }}.tipa
